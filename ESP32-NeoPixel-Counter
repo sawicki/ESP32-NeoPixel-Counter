@@ -1,0 +1,135 @@
+#include <WiFi.h>              // Library for WiFi connection
+#include <WebServer.h>         // Library for web server functionality
+#include <Adafruit_NeoPixel.h> // Library for controlling NeoPixels (LEDs)
+#include <WiFiManager.h>       // Library for easier WiFi setup
+
+#define LED_PIN 10            // The GPIO pin connected to the NeoPixels
+#define NUM_LEDS 1000         // Max number of neopixels
+#define SERVER_HOSTNAME "Ws2812Counter" // Hostname for the web server
+
+
+WebServer server(80);
+Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
+
+
+class CustomWiFiManager {
+public:
+    CustomWiFiManager(const char* apName) {
+        this->apName = apName;
+        this->hostname = SERVER_HOSTNAME; // Default hostname
+    }
+
+    void setupWiFi() {
+        WiFi.setHostname(hostname); // Sets the device's hostname on the network
+
+        WiFiManager wifiManager;
+        wifiManager.setTimeout(180); // 3-minute timeout for connecting to WiFi
+
+        // Tries to connect to WiFi. If unsuccessful, starts an access point for configuration
+        if (!wifiManager.autoConnect(apName)) {
+            Serial.println("Failed to connect. Starting AP for configuration.");
+            ESP.restart(); // Restart the device to try again
+        } else {
+            Serial.println("Connected to WiFi!");
+        }
+    }
+
+private:
+    const char* apName;
+    const char* hostname;
+};
+
+
+
+void setup() {
+  Serial.begin(115200); // Start serial communication at 115200 baud rate
+  CustomWiFiManager wifiManager("ESP32_AP"); // Create a WiFi manager instance with a specific access point name
+  wifiManager.setupWiFi(); // Setup WiFi connection
+
+  strip.begin(); // Initialize the NeoPixel strip
+  setLED(0); // Set the first LED to red
+
+  setupServerRoutes(); // Initialize web server routes
+  server.begin(); // Start the web server
+}
+
+void loop() {
+  server.handleClient(); // Handles incoming web requests
+}
+
+
+void setupServerRoutes() {
+  // Root route - serves the main HTML page
+  server.on("/", HTTP_GET, handleRoot);
+
+  // Set route - changes the color of a specified LED
+  server.on("/set", HTTP_GET, []() {
+    int ledNumber = server.arg("index").toInt();
+    setLED(ledNumber); // Call setLED function with the LED number
+    server.send(200, "text/plain", "OK"); // Respond with "OK"
+  });
+}
+
+
+
+
+
+void handleRoot() {
+  // Serves the HTML page when the root URL ("/") is accessed
+  String html = "<!DOCTYPE html><html>"
+                "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+                // Ensures the webpage is mobile-friendly by setting the viewport
+                "</head><body><div class=\"container\">"
+                "<h2>ESP32 LED Controller</h2>" // Title of the web page
+                "<p>Adjust the sliders to change the LED index</p>" // Instructions for the user
+                // Slider for selecting the hundreds place of the LED index
+                "<label for=\"slider1\">100s Slider (0-900):</label>"
+                "<input type=\"range\" min=\"0\" max=\"900\" step=\"100\" value=\"0\" id=\"slider1\" onchange=\"updateLED()\"><br>"
+                // Slider for selecting the tens place of the LED index
+                "<label for=\"slider2\">10s Slider (0-90):</label>"
+                "<input type=\"range\" min=\"0\" max=\"90\" step=\"10\" value=\"0\" id=\"slider2\" onchange=\"updateLED()\"><br>"
+                // Slider for selecting the ones place of the LED index
+                "<label for=\"slider3\">1s Slider (0-9):</label>"
+                "<input type=\"range\" min=\"0\" max=\"9\" step=\"1\" value=\"0\" id=\"slider3\" onchange=\"updateLED()\"><br>"
+                // Displays the current index selected by the sliders
+                "<p>Index: <span id=\"index\">0</span></p>"
+                // Displays the current LED number (index + 1) selected by the sliders
+                "<p>LED Number: <span id=\"ledNumber\">1</span></p>"
+                // JavaScript to fetch the new LED index from the server when sliders change
+                "<script>"
+                "function updateLED() {"
+                "  var slider1 = document.getElementById('slider1').value;"
+                "  var slider2 = document.getElementById('slider2').value;"
+                "  var slider3 = document.getElementById('slider3').value;"
+                // Calculates the index based on the slider positions
+                "  var index = parseInt(slider1) + parseInt(slider2) + parseInt(slider3);"
+                // Adjusts for zero-indexing in the LED strip
+                "  var ledNumber = index + 1;"
+                // Updates the display with the new index and LED number
+                "  document.getElementById('index').innerText = index;"
+                "  document.getElementById('ledNumber').innerText = ledNumber;"
+                // Makes a GET request to the /set route with the new index and LED number
+                "  fetch('/set?index=' + index + '&ledNumber=' + ledNumber)"
+                "    .then(response => response.text())"
+                "    .then(data => console.log(data))" // Logs the response for debugging
+                "    .catch(error => console.error('Fetch error:', error));" // Logs errors
+                "}"
+                "</script>"
+                "</div></body></html>";
+  // Sends the HTML content as the response to the HTTP request
+  server.send(200, "text/html", html);
+}
+
+
+
+
+
+void setLED(int ledNumber) {
+  strip.clear(); // Turn off all LEDs
+  if (ledNumber >= 0 && ledNumber < NUM_LEDS) {
+    strip.setPixelColor(ledNumber, strip.Color(255, 0, 0)); // Set the specified LED to red
+    strip.show(); // Update the strip to show the change
+  }
+}
+
+
