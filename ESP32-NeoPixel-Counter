@@ -3,9 +3,9 @@
 #include <Adafruit_NeoPixel.h> // Library for controlling NeoPixels (LEDs)
 #include <WiFiManager.h>       // Library for easier WiFi setup
 
-#define LED_PIN 10            // The GPIO pin connected to the NeoPixels
+#define LED_PIN 16            // The GPIO pin connected to the NeoPixels
 #define NUM_LEDS 1000         // Max number of neopixels
-#define SERVER_HOSTNAME "Ws2812Counter" // Hostname for the web server
+#define SERVER_HOSTNAME "WS2812Counter" // Hostname for the web server
 
 
 WebServer server(80);
@@ -28,6 +28,7 @@ public:
         // Tries to connect to WiFi. If unsuccessful, starts an access point for configuration
         if (!wifiManager.autoConnect(apName)) {
             Serial.println("Failed to connect. Starting AP for configuration.");
+             Serial.println("Default IP for Access Point is 192.168.4.1");
             ESP.restart(); // Restart the device to try again
         } else {
             Serial.println("Connected to WiFi!");
@@ -47,11 +48,17 @@ void setup() {
   wifiManager.setupWiFi(); // Setup WiFi connection
 
   strip.begin(); // Initialize the NeoPixel strip
-  setLED(0); // Set the first LED to red
+  // Set the first 3 LEDs to red, green, and blue to check that GRB is correct
+  Serial.println("Setting first 3 pixels to RGB to make sure GRB is correct for initalization");
+  strip.setPixelColor(0, strip.Color(255, 0, 0)); // Red
+  strip.setPixelColor(1, strip.Color(0, 255, 0)); // Green
+  strip.setPixelColor(2, strip.Color(0, 0, 255)); // Blue
+  strip.show(); // Update the strip to show the changes
 
   setupServerRoutes(); // Initialize web server routes
   server.begin(); // Start the web server
 }
+
 
 void loop() {
   server.handleClient(); // Handles incoming web requests
